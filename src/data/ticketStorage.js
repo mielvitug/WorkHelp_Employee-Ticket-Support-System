@@ -54,6 +54,48 @@ export function getTickets() {
   return readTickets()
 }
 
+export function getTicketById(ticketId) {
+  const ticket = readTickets().find(({ id }) => id === ticketId)
+  return ticket ?? null
+}
+
+export function updateTicketStatus(ticketId, status) {
+  if (!statuses.includes(status)) {
+    throw new Error('Choose a valid ticket status.')
+  }
+
+  const tickets = readTickets()
+  const ticketIndex = tickets.findIndex(({ id }) => id === ticketId)
+  if (ticketIndex === -1) {
+    throw new Error('Ticket not found.')
+  }
+
+  const existingTicket = tickets[ticketIndex]
+  if (existingTicket.status === status) {
+    return existingTicket
+  }
+
+  const now = new Date().toISOString()
+  const updatedTicket = {
+    ...existingTicket,
+    status,
+    updatedAt: now,
+    resolvedAt: status === 'resolved' || status === 'closed'
+      ? existingTicket.resolvedAt ?? now
+      : null,
+  }
+  const updatedTickets = [...tickets]
+  updatedTickets[ticketIndex] = updatedTicket
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTickets))
+  } catch {
+    throw new Error('Unable to save this status change in your browser. Check your storage settings and try again.')
+  }
+
+  return updatedTicket
+}
+
 export function createTicket({ title, description, category, priority }) {
   const trimmedTitle = title.trim()
   const trimmedDescription = description.trim()

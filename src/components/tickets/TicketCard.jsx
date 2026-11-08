@@ -1,4 +1,5 @@
 import { Badge } from '../ui/Badge'
+import { Link } from 'react-router-dom'
 import './TicketCard.css'
 
 const statusLabels = {
@@ -41,23 +42,29 @@ export function TicketCard({ ticket }) {
   const created = new Date(ticket.createdAt).toLocaleDateString()
 
   return (
-    <article className="ticket-card">
-      <div className="ticket-card-head">
-        <span className="ticket-id">#{ticket.id.replace('t-', '')}</span>
-        <div className="ticket-badges">
-          <Badge tone={priorityTones[ticket.priority]}>
-            {priorityLabels[ticket.priority]}
-          </Badge>
-          <Badge tone={statusTones[ticket.status]}>
-            {statusLabels[ticket.status]}
-          </Badge>
+    <Link
+      className="ticket-card-link"
+      to={`/tickets/${ticket.id}`}
+      aria-label={`View ticket ${ticket.id.replace('t-', '')}: ${ticket.title}`}
+    >
+      <article className="ticket-card">
+        <div className="ticket-card-head">
+          <span className="ticket-id">#{ticket.id.replace('t-', '')}</span>
+          <div className="ticket-badges">
+            <Badge tone={priorityTones[ticket.priority]}>
+              {priorityLabels[ticket.priority]}
+            </Badge>
+            <Badge tone={statusTones[ticket.status]}>
+              {statusLabels[ticket.status]}
+            </Badge>
+          </div>
         </div>
-      </div>
 
-      <h2 className="ticket-title">{ticket.title}</h2>
-      <p className="ticket-meta">
-        {categoryLabels[ticket.category]} · {ticket.requesterName} · {created}
-      </p>
-    </article>
+        <h2 className="ticket-title">{ticket.title}</h2>
+        <p className="ticket-meta">
+          {categoryLabels[ticket.category]} · {ticket.requesterName} · {created}
+        </p>
+      </article>
+    </Link>
   )
 }

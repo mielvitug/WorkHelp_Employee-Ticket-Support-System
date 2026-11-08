@@ -4,6 +4,8 @@ Employee Ticket Support System built with React, JavaScript, Vite, and React Rou
 
 Tickets can be created from the Tickets page. Ticket data is stored in this browser's
 local storage and is not shared across browsers or devices.
+Open any ticket to view its details and update its status; status changes are saved
+alongside the ticket in local storage.
 
 ## Getting started
 
