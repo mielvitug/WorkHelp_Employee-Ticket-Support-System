@@ -1,3 +1,32 @@
+.ticket-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ticket-create-link,
+.ticket-form-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ticket-create-link:hover,
+.ticket-form-submit:hover {
+  background: #1d4ed8;
+}
+
 .ticket-list {
   display: grid;
   gap: 0.75rem;
@@ -11,4 +40,13 @@
   border-radius: 0.75rem;
   text-align: center;
   color: #64748b;
+}
+
+.ticket-storage-error {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #fecaca;
+  border-radius: 0.75rem;
+  background: #fef2f2;
+  color: #b91c1c;
 }

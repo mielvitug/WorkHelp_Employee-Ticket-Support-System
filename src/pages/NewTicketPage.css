@@ -1,0 +1,80 @@
+.new-ticket-page {
+  max-width: 42rem;
+}
+
+.ticket-form {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.ticket-form-field {
+  display: grid;
+  gap: 0.5rem;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.ticket-form-field input,
+.ticket-form-field textarea,
+.ticket-form-field select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 400;
+}
+
+.ticket-form-field textarea {
+  resize: vertical;
+}
+
+.ticket-form-field input:focus,
+.ticket-form-field textarea:focus,
+.ticket-form-field select:focus {
+  outline: 2px solid #bfdbfe;
+  outline-offset: 1px;
+  border-color: #93c5fd;
+}
+
+.ticket-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.ticket-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.ticket-form-cancel {
+  color: #475569;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.ticket-form-cancel:hover {
+  color: #0f172a;
+}
+
+@media (max-width: 480px) {
+  .ticket-form {
+    padding: 1rem;
+  }
+
+  .ticket-form-row {
+    grid-template-columns: 1fr;
+  }
+}

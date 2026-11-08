@@ -1,36 +1,35 @@
-import type { Ticket, TicketCategory, TicketPriority, TicketStatus } from '../../types/ticket'
-import { Badge, type BadgeTone } from '../ui/Badge'
+import { Badge } from '../ui/Badge'
 import './TicketCard.css'
 
-const statusLabels: Record<TicketStatus, string> = {
+const statusLabels = {
   open: 'Open',
   in_progress: 'In progress',
   resolved: 'Resolved',
   closed: 'Closed',
 }
 
-const statusTones: Record<TicketStatus, BadgeTone> = {
+const statusTones = {
   open: 'info',
   in_progress: 'warning',
   resolved: 'success',
   closed: 'neutral',
 }
 
-const priorityLabels: Record<TicketPriority, string> = {
+const priorityLabels = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
   urgent: 'Urgent',
 }
 
-const priorityTones: Record<TicketPriority, BadgeTone> = {
+const priorityTones = {
   low: 'neutral',
   medium: 'info',
   high: 'warning',
   urgent: 'danger',
 }
 
-const categoryLabels: Record<TicketCategory, string> = {
+const categoryLabels = {
   hardware: 'Hardware',
   software: 'Software',
   network: 'Network',
@@ -38,7 +37,7 @@ const categoryLabels: Record<TicketCategory, string> = {
   other: 'Other',
 }
 
-export function TicketCard({ ticket }: { ticket: Ticket }) {
+export function TicketCard({ ticket }) {
   const created = new Date(ticket.createdAt).toLocaleDateString()
 
   return (

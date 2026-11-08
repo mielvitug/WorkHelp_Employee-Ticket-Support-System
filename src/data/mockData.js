@@ -1,22 +1,20 @@
-import type { Ticket, User } from '../types/ticket'
-
-export const employeeUser: User = {
+export const employeeUser = {
     id: 'u-1',
     name: 'Mia Santos',
     email: 'mia.santos@example.com',
     role: 'employee',
 }
 
-export const supportUser: User = {
+export const supportUser = {
     id: 'u-2',
     name: 'Alex Cruz',
     email: 'alex.cruz@example.com',
     role: 'support',
 }
 
-export const currentUser: User = employeeUser
+export const currentUser = employeeUser
 
-export const mockTickets: Ticket[] = [
+export const mockTickets = [
     {
         id: 't-1',
         title: 'Laptop cannot connect to office Wi-Fi',

@@ -1,16 +1,20 @@
-# React + Vite
+# WorkHelp
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Employee Ticket Support System built with React, JavaScript, Vite, and React Router DOM.
 
-Currently, two official plugins are available:
+Tickets can be created from the Tickets page. Ticket data is stored in this browser's
+local storage and is not shared across browsers or devices.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Getting started
 
-## React Compiler
+```sh
+npm install
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Available scripts
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+- `npm run dev` starts the development server.
+- `npm run build` creates a production build.
+- `npm run preview` previews the production build.
+- `npm run lint` runs Oxlint.

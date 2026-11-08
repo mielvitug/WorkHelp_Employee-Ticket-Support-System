@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
-import './Applayout.css'
+import './AppLayout.css'
 
-const navClass = ({ isActive }: {isActive: boolean }) =>
+const navClass = ({ isActive }) =>
     isActive ? 'nav-link nav-link-active' : 'nav-link'
 
 export function AppLayout() {

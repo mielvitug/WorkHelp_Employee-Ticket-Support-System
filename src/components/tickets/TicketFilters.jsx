@@ -1,20 +1,6 @@
-import type { TicketPriority, TicketStatus } from '../../types/ticket'
 import './TicketFilters.css'
 
-export type StatusFilter = TicketStatus | 'all'
-export type PriorityFilter = TicketPriority | 'all'
-
-type TicketFiltersProps = {
-  query: string
-  status: StatusFilter
-  priority: PriorityFilter
-  onQueryChange: (value: string) => void
-  onStatusChange: (value: StatusFilter) => void
-  onPriorityChange: (value: PriorityFilter) => void
-  onClear: () => void
-}
-
-const statusOptions: { value: StatusFilter; label: string }[] = [
+const statusOptions = [
   { value: 'all', label: 'All statuses' },
   { value: 'open', label: 'Open' },
   { value: 'in_progress', label: 'In progress' },
@@ -22,7 +8,7 @@ const statusOptions: { value: StatusFilter; label: string }[] = [
   { value: 'closed', label: 'Closed' },
 ]
 
-const priorityOptions: { value: PriorityFilter; label: string }[] = [
+const priorityOptions = [
   { value: 'all', label: 'All priorities' },
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
@@ -38,7 +24,7 @@ export function TicketFilters({
   onStatusChange,
   onPriorityChange,
   onClear,
-}: TicketFiltersProps) {
+}) {
   return (
     <div className="ticket-filters">
       <input
@@ -52,7 +38,7 @@ export function TicketFilters({
       <select
         className="ticket-filters-select"
         value={status}
-        onChange={(event) => onStatusChange(event.target.value as StatusFilter)}
+        onChange={(event) => onStatusChange(event.target.value)}
       >
         {statusOptions.map((option) => (
           <option key={option.value} value={option.value}>
@@ -64,7 +50,7 @@ export function TicketFilters({
       <select
         className="ticket-filters-select"
         value={priority}
-        onChange={(event) => onPriorityChange(event.target.value as PriorityFilter)}
+        onChange={(event) => onPriorityChange(event.target.value)}
       >
         {priorityOptions.map((option) => (
           <option key={option.value} value={option.value}>
