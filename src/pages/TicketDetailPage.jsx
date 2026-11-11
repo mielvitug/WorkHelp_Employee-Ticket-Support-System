@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { Badge } from '../components/ui/Badge'
 import {
   createTicketMessage,
   getTicketById,
   getTicketMessages,
+  updateTicketArchived,
   updateTicketAssignment,
   updateTicketStatus,
 } from '../data/ticketStorage'
@@ -61,6 +62,7 @@ function formatDate(value) {
 export function TicketDetailPage() {
   const { user } = useAuth()
   const { ticketId } = useParams()
+  const navigate = useNavigate()
   const [ticketState, setTicketState] = useState({ ticket: null, error: '', loading: true, ticketId: null })
   const [conversationState, setConversationState] = useState({
     messages: null,
@@ -70,6 +72,7 @@ export function TicketDetailPage() {
   })
   const [statusSaving, setStatusSaving] = useState(false)
   const [assignmentSaving, setAssignmentSaving] = useState(false)
+  const [archiveSaving, setArchiveSaving] = useState(false)
   const [replyDraft, setReplyDraft] = useState({ ticketId: null, value: '' })
   const [replyErrorState, setReplyErrorState] = useState({ ticketId: null, error: '' })
   const [replySaving, setReplySaving] = useState(false)
@@ -131,6 +134,23 @@ export function TicketDetailPage() {
     }
   }
 
+  const updateArchived = async (archived) => {
+    if (archiveSaving) return
+    if (archived && !window.confirm('Archive this ticket? You can restore it later from Archived tickets.')) {
+      return
+    }
+
+    setArchiveSaving(true)
+    try {
+      await updateTicketArchived(ticketId, archived)
+      navigate('/tickets')
+    } catch (error) {
+      setTicketState((current) => ({ ...current, error: error.message }))
+    } finally {
+      setArchiveSaving(false)
+    }
+  }
+
   const submitReply = async (event) => {
     event.preventDefault()
     const content = reply.trim()
@@ -188,6 +208,7 @@ export function TicketDetailPage() {
   }
 
   const { ticket } = ticketState
+  const isArchived = Boolean(ticket.archivedAt)
 
   return (
     <section className="ticket-detail">
@@ -199,9 +220,33 @@ export function TicketDetailPage() {
           <h1 className="page-title">{ticket.title}</h1>
         </div>
         <div className="ticket-detail-badges">
+          {isArchived && <Badge tone="neutral">Archived</Badge>}
           <Badge tone={priorityTones[ticket.priority]}>{priorityLabels[ticket.priority]}</Badge>
         </div>
       </div>
+
+      {isArchived && (
+        <p className="ticket-archived-notice" role="status">
+          This ticket is archived. Its history is preserved, but replies and updates are paused.
+        </p>
+      )}
+
+      {user.role === 'support' && (
+        <div className="ticket-archive-actions">
+          <button
+            className={`ticket-archive-button${isArchived ? ' ticket-restore-button' : ''}`}
+            type="button"
+            onClick={() => updateArchived(!isArchived)}
+            disabled={archiveSaving}
+          >
+            {archiveSaving ? 'Saving...' : isArchived ? 'Restore ticket' : 'Archive ticket'}
+          </button>
+        </div>
+      )}
+
+      {ticketState.error && (
+        <p className="ticket-storage-error" role="alert">{ticketState.error}</p>
+      )}
 
       <div className="ticket-detail-content">
         <section className="ticket-detail-description">
@@ -221,7 +266,7 @@ export function TicketDetailPage() {
                     className="ticket-status-select"
                     value={ticket.status}
                     onChange={updateStatus}
-                    disabled={statusSaving}
+                    disabled={statusSaving || isArchived}
                   >
                     {statusOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -246,7 +291,7 @@ export function TicketDetailPage() {
               <dt>Assignee</dt>
               <dd className="ticket-assignee-value">
                 <span>{ticket.assigneeName ?? 'Unassigned'}</span>
-                {user.role === 'support' && (
+                {user.role === 'support' && !isArchived && (
                   <button
                     className="ticket-assignment-button"
                     type="button"
@@ -274,6 +319,12 @@ export function TicketDetailPage() {
               <div>
                 <dt>Resolved</dt>
                 <dd>{formatDate(ticket.resolvedAt)}</dd>
+              </div>
+            )}
+            {ticket.archivedAt && (
+              <div>
+                <dt>Archived</dt>
+                <dd>{formatDate(ticket.archivedAt)}</dd>
               </div>
             )}
           </dl>
@@ -326,41 +377,42 @@ export function TicketDetailPage() {
           </ol>
         )}
 
-        <form className="ticket-reply-form" onSubmit={submitReply}>
-          <label className="ticket-reply-label" htmlFor="ticket-reply">Add a reply</label>
-          <textarea
-            id="ticket-reply"
-            className="ticket-reply-input"
-            value={reply}
-            onChange={(event) => setReplyDraft({ ticketId, value: event.target.value })}
-            placeholder="Write a message for the requester and support team..."
-            maxLength={2000}
-            rows={4}
-            required
-          />
-          {replyError && <p className="ticket-storage-error" role="alert">{replyError}</p>}
-          <div className="ticket-reply-footer">
-            <span className="ticket-reply-note">Visible to the requester and support team</span>
-            <button
-              className="ticket-reply-submit"
-              type="submit"
-              disabled={
-                replySaving ||
-                !reply.trim() ||
-                conversationState.loading ||
-                conversationState.ticketId !== ticketId ||
-                Boolean(conversationState.error)
-              }
-            >
-              {replySaving ? 'Sending...' : 'Send reply'}
-            </button>
-          </div>
-        </form>
+        {isArchived ? (
+          <p className="ticket-conversation-status">Restore this ticket to add a reply.</p>
+        ) : (
+          <form className="ticket-reply-form" onSubmit={submitReply}>
+            <label className="ticket-reply-label" htmlFor="ticket-reply">Add a reply</label>
+            <textarea
+              id="ticket-reply"
+              className="ticket-reply-input"
+              value={reply}
+              onChange={(event) => setReplyDraft({ ticketId, value: event.target.value })}
+              placeholder="Write a message for the requester and support team..."
+              maxLength={2000}
+              rows={4}
+              required
+            />
+            {replyError && <p className="ticket-storage-error" role="alert">{replyError}</p>}
+            <div className="ticket-reply-footer">
+              <span className="ticket-reply-note">Visible to the requester and support team</span>
+              <button
+                className="ticket-reply-submit"
+                type="submit"
+                disabled={
+                  replySaving ||
+                  !reply.trim() ||
+                  conversationState.loading ||
+                  conversationState.ticketId !== ticketId ||
+                  Boolean(conversationState.error)
+                }
+              >
+                {replySaving ? 'Sending...' : 'Send reply'}
+              </button>
+            </div>
+          </form>
+        )}
       </section>
 
-      {ticketState.error && (
-        <p className="ticket-storage-error" role="alert">{ticketState.error}</p>
-      )}
     </section>
   )
 }

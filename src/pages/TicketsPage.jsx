@@ -9,27 +9,30 @@ import './TicketsPage.css'
 
 export function TicketsPage() {
   const { user } = useAuth()
-  const [ticketState, setTicketState] = useState({ tickets: null, error: '' })
-  const { tickets, error: loadError } = ticketState
+  const [ticketState, setTicketState] = useState({ tickets: null, error: '', archivedOnly: false })
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const [priority, setPriority] = useState('all')
   const [assignedToMe, setAssignedToMe] = useState(false)
+  const [archivedOnly, setArchivedOnly] = useState(false)
+  const isCurrentTicketState = ticketState.archivedOnly === archivedOnly
+  const tickets = isCurrentTicketState ? ticketState.tickets : null
+  const loadError = isCurrentTicketState ? ticketState.error : ''
 
   useEffect(() => {
     let active = true
-    getTickets().then(
+    getTickets({ archived: archivedOnly }).then(
       (loadedTickets) => {
-        if (active) setTicketState({ tickets: loadedTickets, error: '' })
+        if (active) setTicketState({ tickets: loadedTickets, error: '', archivedOnly })
       },
       (error) => {
-        if (active) setTicketState({ tickets: null, error: error.message })
+        if (active) setTicketState({ tickets: null, error: error.message, archivedOnly })
       },
     )
     return () => {
       active = false
     }
-  }, [])
+  }, [archivedOnly])
 
   const visibleTickets = filterTickets(tickets ?? [], {
     query,
@@ -45,18 +48,28 @@ export function TicketsPage() {
     setAssignedToMe(false)
   }
 
+  const toggleArchived = () => {
+    clearFilters()
+    setArchivedOnly((current) => !current)
+  }
+
   return (
     <section className="tickets-page">
       <div className="ticket-page-header">
         <div>
           <p className="page-eyebrow">Support workspace</p>
-          <h1 className="page-title">Tickets</h1>
+          <h1 className="page-title">{archivedOnly ? 'Archived tickets' : 'Tickets'}</h1>
           {tickets && (
             <p className="page-subtitle">{visibleTickets.length} in view <span className="count-divider">/</span> {tickets.length} total</p>
           )}
         </div>
         {user.role === 'employee' && (
           <Link className="ticket-create-link" to="/tickets/new">New ticket</Link>
+        )}
+        {user.role === 'support' && (
+          <button className="ticket-archive-view-toggle" type="button" onClick={toggleArchived}>
+            {archivedOnly ? 'View active tickets' : 'View archived'}
+          </button>
         )}
       </div>
 
