@@ -462,6 +462,101 @@ test('requires a valid session and returns user and role without password data',
   })
 })
 
+test('registers employees only and normalizes unique email addresses', async () => {
+  await withApi(async ({ baseUrl, db }) => {
+    const register = (body) => fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    for (const body of [
+      { name: 'New User', email: 'not-an-email', password: 'valid-password-123' },
+      { name: ' ', email: 'new@example.com', password: 'valid-password-123' },
+      { name: 'New User', email: 'new@example.com', password: 'short' },
+      { name: 'New User', email: 'new@example.com', password: 'x'.repeat(36) },
+    ]) {
+      assert.equal((await register(body)).status, 400)
+    }
+
+    const response = await register({
+      name: '  Jamie New  ',
+      email: '  Jamie.New@Example.COM  ',
+      password: 'N'.repeat(35),
+      role: 'support',
+    })
+    const body = await response.json()
+    assert.equal(response.status, 201)
+    assert.match(response.headers.get('set-cookie'), /HttpOnly/)
+    assert.deepEqual(body.user, {
+      id: body.user.id,
+      name: 'Jamie New',
+      email: 'jamie.new@example.com',
+      role: 'employee',
+    })
+    assert.match(body.user.id, /^u-[0-9a-f-]{36}$/)
+    assert.equal(db.prepare('SELECT role FROM users WHERE email = ?')
+      .get('jamie.new@example.com').role, 'employee')
+
+    const duplicate = await register({
+      name: 'Duplicate User',
+      email: 'JAMIE.NEW@example.com',
+      password: 'valid-password-123',
+    })
+    assert.equal(duplicate.status, 409)
+
+    const seededDuplicate = await register({
+      name: 'Existing Employee',
+      email: 'MIA.SANTOS@EXAMPLE.COM',
+      password: 'valid-password-123',
+    })
+    assert.equal(seededDuplicate.status, 409)
+
+    const createdUserLogin = await fetch(`${baseUrl}/api/tickets`, {
+      headers: { cookie: response.headers.get('set-cookie').split(';')[0] },
+    })
+    assert.equal(createdUserLogin.status, 200)
+    assert.deepEqual(await createdUserLogin.json(), [])
+    assert.equal(db.prepare('SELECT role FROM users WHERE id = ?').get('u-2').role, 'support')
+  })
+})
+
+test('changes passwords after current-password verification and revokes other sessions', async () => {
+  await withApi(async ({ baseUrl, login, request, db }) => {
+    const firstSession = await login('mia.santos@example.com', 'employee-test-password')
+    const secondSession = await login('mia.santos@example.com', 'employee-test-password')
+    const change = (currentPassword, newPassword, cookie = firstSession.cookie) =>
+      fetch(`${baseUrl}/api/auth/password`, {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          ...(cookie ? { cookie } : {}),
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+
+    assert.equal((await change('wrong-password', 'new-password-123')).status, 400)
+    assert.equal((await change('employee-test-password', 'short')).status, 400)
+    assert.equal((await change('employee-test-password', 'x'.repeat(36))).status, 400)
+    assert.equal((await change('employee-test-password', 'employee-test-password')).status, 400)
+    assert.equal((await change('employee-test-password', 'new-password-123', null)).status, 401)
+
+    const updated = await change('employee-test-password', 'N'.repeat(35))
+    assert.equal(updated.status, 200)
+    assert.equal((await updated.json()).user.id, 'u-1')
+
+    assert.equal((await request('/api/tickets', {}, firstSession.cookie)).status, 200)
+    assert.equal((await request('/api/tickets', {}, secondSession.cookie)).status, 401)
+    assert.equal((await login('mia.santos@example.com', 'employee-test-password')).response.status, 401)
+    assert.equal((await login('mia.santos@example.com', 'N'.repeat(35))).response.status, 200)
+    assert.equal((await login('alex.cruz@example.com', 'support-test-password')).response.status, 200)
+
+    const employeeSessions = db.prepare('SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?')
+      .get('u-1').count
+    assert.equal(employeeSessions, 2)
+  })
+})
+
 test('persists sessions across requests, expires them, and invalidates them on sign-out', async () => {
   await withApi(async ({ baseUrl, login, db }) => {
     const { response, cookie } = await login('mia.santos@example.com', 'employee-test-password')

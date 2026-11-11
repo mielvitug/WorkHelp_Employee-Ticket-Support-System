@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
 import Database from 'better-sqlite3'
 import express from 'express'
 import { employeeUser, mockTickets, supportUser } from '../src/data/mockData.js'
@@ -12,6 +12,8 @@ const statuses = new Set(['open', 'in_progress', 'resolved', 'closed'])
 const sessionCookieName = 'workhelp.sid'
 const sessionDurationMs = 7 * 24 * 60 * 60 * 1000
 const maxMessageLength = 2000
+const minPasswordLength = 12
+const maxPasswordLength = 35
 const ticketColumns = `
   id, title, description, status, priority, category,
   requester_id, requester_name, requester_email,
@@ -245,6 +247,15 @@ function setSessionCookie(response, token, maxAgeSeconds) {
   )
 }
 
+function createSession(db, response, user) {
+  const token = randomBytes(32).toString('base64url')
+  const expiresAt = Date.now() + sessionDurationMs
+  db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now())
+  db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
+    .run(hashSessionToken(token), user.id, expiresAt)
+  setSessionCookie(response, token, sessionDurationMs / 1000)
+}
+
 function clearSessionCookie(response) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
   response.setHeader(
@@ -327,6 +338,67 @@ export function createApp(
   })
 
   const loginAttempts = new Map()
+  const registrationAttempts = new Map()
+  app.post('/api/auth/register', (request, response) => {
+    const now = Date.now()
+    const address = request.ip
+    const attempts = registrationAttempts.get(address)
+    if (attempts && attempts.resetAt > now && attempts.count >= 8) {
+      return response.status(429).json({ error: 'Too many registration attempts. Try again in 15 minutes.' })
+    }
+
+    const nextAttempts = !attempts || attempts.resetAt <= now
+      ? { count: 1, resetAt: now + 15 * 60 * 1000 }
+      : { ...attempts, count: attempts.count + 1 }
+    registrationAttempts.set(address, nextAttempts)
+
+    const { name, email, password } = request.body ?? {}
+    const normalizedName = typeof name === 'string' ? name.trim() : ''
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    if (
+      !normalizedName ||
+      normalizedName.length > 80 ||
+      normalizedName.includes('\0') ||
+      normalizedEmail.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
+      typeof password !== 'string' ||
+      password.length < minPasswordLength ||
+      password.length > maxPasswordLength
+    ) {
+      return response.status(400).json({
+        error: `Enter a name, valid email address, and password between ${minPasswordLength} and ${maxPasswordLength} characters.`,
+      })
+    }
+
+    const user = {
+      id: `u-${randomUUID()}`,
+      name: normalizedName,
+      email: normalizedEmail,
+      role: 'employee',
+    }
+    const { salt, hash } = hashPassword(password)
+    const sessionToken = randomBytes(32).toString('base64url')
+    const expiresAt = now + sessionDurationMs
+    const createUserAndSession = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT OR IGNORE INTO users (id, name, email, role, password_salt, password_hash)
+        VALUES (?, ?, ?, 'employee', ?, ?)
+      `).run(user.id, user.name, user.email, salt, hash)
+      if (result.changes === 0) return false
+
+      db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now)
+      db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
+        .run(hashSessionToken(sessionToken), user.id, expiresAt)
+      return true
+    })
+    if (!createUserAndSession()) {
+      return response.status(409).json({ error: 'An account with this email already exists.' })
+    }
+
+    setSessionCookie(response, sessionToken, sessionDurationMs / 1000)
+    return response.status(201).json({ user: publicUser(user) })
+  })
+
   app.post('/api/auth/login', (request, response) => {
     const now = Date.now()
     const address = request.ip
@@ -354,12 +426,52 @@ export function createApp(
 
     loginAttempts.delete(address)
     db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now)
-    const token = randomBytes(32).toString('base64url')
-    const expiresAt = now + sessionDurationMs
-    db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
-      .run(hashSessionToken(token), user.id, expiresAt)
-    setSessionCookie(response, token, sessionDurationMs / 1000)
+    createSession(db, response, user)
     return response.json({ user: publicUser(user) })
+  })
+
+  app.patch('/api/auth/password', authenticate, (request, response) => {
+    const { currentPassword, newPassword } = request.body ?? {}
+    if (
+      typeof currentPassword !== 'string' ||
+      currentPassword.length === 0 ||
+      currentPassword.length > 200 ||
+      typeof newPassword !== 'string' ||
+      newPassword.length < minPasswordLength ||
+      newPassword.length > maxPasswordLength
+    ) {
+      return response.status(400).json({
+        error: `Enter your current password and a new password between ${minPasswordLength} and ${maxPasswordLength} characters.`,
+      })
+    }
+
+    const account = db.prepare(`
+      SELECT password_salt, password_hash FROM users WHERE id = ?
+    `).get(request.user.id)
+    if (!account) {
+      return response.status(401).json({ error: 'Your account could not be verified. Sign in again.' })
+    }
+
+    const salt = Buffer.from(account.password_salt, 'hex')
+    const expectedHash = Buffer.from(account.password_hash, 'hex')
+    const currentHash = scryptSync(currentPassword, salt, 64)
+    if (!timingSafeEqual(expectedHash, currentHash)) {
+      return response.status(400).json({ error: 'Your current password is incorrect.' })
+    }
+    if (timingSafeEqual(currentHash, scryptSync(newPassword, salt, 64))) {
+      return response.status(400).json({ error: 'Choose a new password that differs from your current password.' })
+    }
+
+    const updatedPassword = hashPassword(newPassword)
+    const changePassword = db.transaction(() => {
+      db.prepare('UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?')
+        .run(updatedPassword.salt, updatedPassword.hash, request.user.id)
+      db.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?')
+        .run(request.user.id, request.sessionTokenHash)
+    })
+    changePassword()
+
+    return response.json({ user: request.user })
   })
 
   app.post('/api/auth/logout', (request, response) => {

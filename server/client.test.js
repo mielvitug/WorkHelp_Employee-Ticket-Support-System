@@ -115,6 +115,20 @@ test('frontend API client imports legacy tickets once and uses shared data there
       priority: 'all',
       assigneeId: null,
     }).length, allTickets.length)
+
+    const registeredUser = await authApi.registerEmployee({
+      name: 'Client Registered',
+      email: '  client.registered@example.com ',
+      password: 'Client Password 123',
+    })
+    assert.equal(registeredUser.role, 'employee')
+    assert.equal(registeredUser.email, 'client.registered@example.com')
+    await authApi.changePassword('Client Password 123', 'Changed Password 123')
+    await authApi.signOut()
+    assert.equal(
+      (await authApi.signIn('client.registered@example.com', 'Changed Password 123')).id,
+      registeredUser.id,
+    )
   } finally {
     globalThis.fetch = originalFetch
     delete globalThis.window

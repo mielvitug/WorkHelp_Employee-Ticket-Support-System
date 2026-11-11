@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AuthContext } from './context'
-import { getCurrentUser, signIn, signOut } from '../data/authApi'
+import { changePassword as updatePassword, getCurrentUser, registerEmployee, signIn, signOut } from '../data/authApi'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -37,6 +37,15 @@ export function AuthProvider({ children }) {
       setSessionError('')
       setUser(signedInUser)
       return signedInUser
+    },
+    async register(name, email, password) {
+      const signedInUser = await registerEmployee({ name, email, password })
+      setSessionError('')
+      setUser(signedInUser)
+      return signedInUser
+    },
+    async changePassword(currentPassword, newPassword) {
+      return updatePassword(currentPassword, newPassword)
     },
     async logout() {
       await signOut()

@@ -1,0 +1,166 @@
+.account-page {
+  max-width: 36rem;
+}
+
+.standalone-page.account-page {
+  max-width: 36rem;
+  padding-top: clamp(2.5rem, 8vh, 5rem);
+}
+
+.account-page .login-brand {
+  margin-bottom: 2rem;
+}
+
+.account-form,
+.account-profile {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  padding: clamp(1rem, 4vw, 1.4rem);
+  background: linear-gradient(145deg, rgba(22, 26, 40, 0.96), rgba(16, 19, 30, 0.96));
+  box-shadow: var(--shadow-card);
+}
+
+.account-form-heading h2,
+.account-profile h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  font-weight: 630;
+}
+
+.account-form-heading p {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.account-field {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.account-field input {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.65rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--surface-input);
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 400;
+}
+
+.account-field input:focus {
+  border-color: rgba(182, 165, 255, 0.56);
+  outline: 2px solid rgba(182, 165, 255, 0.12);
+  outline-offset: 1px;
+}
+
+.account-field-hint {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+.account-submit {
+  min-height: 2.75rem;
+  border: 1px solid rgba(198, 185, 255, 0.28);
+  border-radius: 0.65rem;
+  padding: 0.65rem 1rem;
+  background: linear-gradient(135deg, #c4b5ff, #a18dff);
+  box-shadow: 0 8px 24px rgba(132, 108, 241, 0.18);
+  color: #171425;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 680;
+  cursor: pointer;
+  transition: transform 150ms ease, filter 150ms ease, opacity 150ms ease;
+}
+
+.account-submit:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.account-submit:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.account-message {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  font-size: 0.8rem;
+}
+
+.account-error {
+  border-color: rgba(255, 111, 139, 0.25);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.account-success {
+  border-color: rgba(167, 233, 208, 0.2);
+  background: rgba(167, 233, 208, 0.08);
+  color: var(--mint);
+}
+
+.account-footer {
+  margin: 1.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.account-footer a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.account-footer a:hover {
+  text-decoration: underline;
+}
+
+.account-profile {
+  gap: 1rem;
+}
+
+.account-profile-details {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+}
+
+.account-profile-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.account-profile-details dt {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.account-profile-details dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.account-profile-details .account-role-value {
+  color: var(--mint);
+  text-transform: capitalize;
+}

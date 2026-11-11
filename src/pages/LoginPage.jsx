@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { demoAccounts } from '../data/demoCredentials'
 import './LoginPage.css'
@@ -121,6 +121,9 @@ export function LoginPage() {
           {isSubmitting ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
+      <p className="login-register">
+        New to WorkHelp? <Link to="/register">Create an employee account</Link>
+      </p>
     </main>
   )
 }

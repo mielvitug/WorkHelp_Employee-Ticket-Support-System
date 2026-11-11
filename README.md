@@ -63,20 +63,27 @@ tickets after signing in; the local copy remains as a backup.
 
 ## Roles and sessions
 
-- Employees can create and view their own tickets.
+- Employees can register with their own email address, create and view their own
+  tickets, and change their password from Account settings.
+- Employee passwords must be 12–35 characters. Password changes require the
+  current password; they keep the current session active and sign out other
+  sessions for that account.
+- Public registration creates Employee accounts only. Support accounts remain
+  restricted to the seeded account; registration does not include email
+  verification or forgotten-password recovery.
 - Employees can read and reply to their own ticket conversations. Replies remain
   available after a ticket is closed.
 - Support users can view all tickets, assign or unassign tickets to themselves,
   filter the list to tickets assigned to them, update ticket statuses, and reply
   to any ticket conversation.
-- Registration and password reset are not implemented.
 - Sessions are stored server-side in SQLite and use HttpOnly, SameSite=Strict cookies
   with a seven-day lifetime. Cookies are marked Secure when `NODE_ENV=production`.
 
-This prototype has no public registration or production deployment setup. The API
-binds to localhost and must not be exposed to an untrusted network. A public deployment
-needs HTTPS, appropriate secure-cookie configuration, operational secret management,
-and deployment/security review.
+Forgotten-password email recovery is not implemented. Although employee
+registration is available, this prototype has no production deployment setup. The
+API binds to localhost and must not be exposed to an untrusted network. A public
+deployment needs HTTPS, appropriate secure-cookie configuration, operational secret
+management, and deployment/security review.
 
 ## Available scripts
 

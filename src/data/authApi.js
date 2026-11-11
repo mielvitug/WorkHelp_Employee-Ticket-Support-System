@@ -45,6 +45,24 @@ export async function signIn(email, password) {
   return result.user
 }
 
+export async function registerEmployee({ name, email, password }) {
+  const result = await request('/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name, email, password }),
+  })
+  return result.user
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  const result = await request('/password', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+  return result.user
+}
+
 export async function signOut() {
   await request('/logout', { method: 'POST' })
 }

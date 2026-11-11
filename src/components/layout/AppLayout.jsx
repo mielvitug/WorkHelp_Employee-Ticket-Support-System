@@ -32,6 +32,7 @@ export function AppLayout() {
                 <nav className="main-nav">
                     <NavLink to="/dashboard" className={navClass}>Dashboard</NavLink>
                     <NavLink to="/tickets" className={navClass}>Tickets</NavLink>
+                    <NavLink to="/account" className={navClass}>Account</NavLink>
                 </nav>
                 <div className="account-nav">
                     <div className="account-identity">
