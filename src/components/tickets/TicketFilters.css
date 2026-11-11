@@ -1,8 +1,12 @@
 .ticket-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 1.5rem;
+  gap: 0.6rem;
+  margin-top: 1.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.85rem;
+  background: rgba(17, 20, 32, 0.72);
 }
 
 .ticket-filters-search {
@@ -11,27 +15,73 @@
 
 .ticket-filters-search,
 .ticket-filters-select,
-.ticket-filters-clear {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-size: 0.875rem;
+.ticket-filters-clear,
+.ticket-filters-assigned {
+  min-height: 2.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.6rem;
+  background: var(--surface-input);
+  color: var(--text-primary);
+  font-size: 0.82rem;
 }
 
-.ticket-filters-clear {
-  font-weight: 500;
-  color: #475569;
-  cursor: pointer;
+.ticket-filters-search,
+.ticket-filters-select {
+  padding: 0.55rem 0.75rem;
 }
 
-.ticket-filters-clear:hover {
-  background: #f1f5f9;
+.ticket-filters-search::placeholder {
+  color: var(--text-muted);
 }
 
 .ticket-filters-search:focus,
 .ticket-filters-select:focus {
-  outline: 2px solid #bfdbfe;
+  border-color: rgba(182, 165, 255, 0.55);
+  outline: 2px solid rgba(182, 165, 255, 0.12);
   outline-offset: 1px;
-  border-color: #93c5fd;
+}
+
+.ticket-filters-select {
+  min-width: 9.5rem;
+}
+
+.ticket-filters-select option {
+  background: #151927;
+  color: var(--text-primary);
+}
+
+.ticket-filters-assigned {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.ticket-filters-assigned input {
+  margin: 0;
+  accent-color: var(--accent-strong);
+}
+
+.ticket-filters-clear {
+  padding: 0.5rem 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.ticket-filters-clear:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+@media (max-width: 560px) {
+  .ticket-filters > * {
+    flex: 1 1 100%;
+  }
+
+  .ticket-filters-select {
+    width: 100%;
+  }
 }

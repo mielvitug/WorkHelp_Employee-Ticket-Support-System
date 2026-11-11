@@ -20,9 +20,11 @@ export function TicketFilters({
   query,
   status,
   priority,
+  assignedToMe,
   onQueryChange,
   onStatusChange,
   onPriorityChange,
+  onAssignedToMeChange,
   onClear,
 }) {
   return (
@@ -58,6 +60,17 @@ export function TicketFilters({
           </option>
         ))}
       </select>
+
+      {onAssignedToMeChange && (
+        <label className="ticket-filters-assigned">
+          <input
+            type="checkbox"
+            checked={assignedToMe}
+            onChange={(event) => onAssignedToMeChange(event.target.checked)}
+          />
+          Assigned to me
+        </label>
+      )}
 
       <button type="button" className="ticket-filters-clear" onClick={onClear}>
         Clear

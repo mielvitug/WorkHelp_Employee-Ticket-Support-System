@@ -12,8 +12,6 @@ export const supportUser = {
     role: 'support',
 }
 
-export const currentUser = employeeUser
-
 export const mockTickets = [
     {
         id: 't-1',

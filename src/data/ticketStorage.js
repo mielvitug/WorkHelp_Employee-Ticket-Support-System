@@ -1,146 +1,177 @@
-import { currentUser, mockTickets } from './mockData'
+const LEGACY_TICKETS_KEY = 'workhelp:tickets'
+const IMPORTED_KEY = 'workhelp:tickets-imported-to-api'
+const MIGRATION_ID_KEY = 'workhelp:tickets-migration-id'
+let migrationPromise
 
-const STORAGE_KEY = 'workhelp:tickets'
-const categories = ['hardware', 'software', 'network', 'access', 'other']
-const priorities = ['low', 'medium', 'high', 'urgent']
-const statuses = ['open', 'in_progress', 'resolved', 'closed']
-
-function readTickets() {
-  let serializedTickets
-
+async function request(path, options) {
+  let response
   try {
-    serializedTickets = window.localStorage.getItem(STORAGE_KEY)
+    response = await fetch(`/api${path}`, options)
   } catch {
-    throw new Error('Unable to access browser storage. Enable local storage and try again.')
+    throw new Error('Unable to connect to the WorkHelp API. Start the API server and try again.')
   }
 
-  if (serializedTickets === null) {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mockTickets))
-    } catch {
-      throw new Error('Unable to save tickets in this browser. Check your storage settings and try again.')
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    throw new Error(
+      `The WorkHelp API returned a non-JSON response (HTTP ${response.status}). Start the API on 127.0.0.1:3001, then restart Vite.`,
+    )
+  }
+
+  let body
+  try {
+    body = await response.json()
+  } catch {
+    throw new Error('The WorkHelp API returned an invalid response.')
+  }
+
+  if (!response.ok) {
+    const error = new Error(body.error ?? 'The WorkHelp API request failed.')
+    error.status = response.status
+    throw error
+  }
+
+  return body
+}
+
+async function importLegacyTickets() {
+  let imported
+  let legacyTickets
+  let migrationId
+
+  const { user } = await requestAuthSession()
+  if (user?.role !== 'employee') {
+    return false
+  }
+
+  try {
+    imported = window.localStorage.getItem(IMPORTED_KEY)
+    if (imported === 'true') {
+      return
     }
 
-    return [...mockTickets]
+    const serializedTickets = window.localStorage.getItem(LEGACY_TICKETS_KEY)
+    if (serializedTickets === null) {
+      window.localStorage.setItem(IMPORTED_KEY, 'true')
+      return
+    }
+
+    legacyTickets = JSON.parse(serializedTickets)
+    if (!Array.isArray(legacyTickets)) {
+      throw new Error('Saved browser ticket data is invalid. It has not been imported.')
+    }
+
+    migrationId = window.localStorage.getItem(MIGRATION_ID_KEY)
+    if (!migrationId) {
+      migrationId = window.crypto.randomUUID()
+      window.localStorage.setItem(MIGRATION_ID_KEY, migrationId)
+    }
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error('Saved browser ticket data is invalid JSON. It has not been imported.')
+    }
+    if (error instanceof Error && error.message.includes('has not been imported')) {
+      throw error
+    }
+    throw new Error('Unable to read or mark saved browser tickets for import.')
   }
 
-  let tickets
-  try {
-    tickets = JSON.parse(serializedTickets)
-  } catch {
-    throw new Error('Saved ticket data is invalid. Clear WorkHelp ticket data from this browser and reload.')
-  }
-
-  const isValidTicketList = Array.isArray(tickets) && tickets.every((ticket) =>
-    ticket &&
-    typeof ticket.id === 'string' &&
-    typeof ticket.title === 'string' &&
-    typeof ticket.description === 'string' &&
-    typeof ticket.requesterName === 'string' &&
-    typeof ticket.createdAt === 'string' &&
-    statuses.includes(ticket.status) &&
-    priorities.includes(ticket.priority) &&
-    categories.includes(ticket.category)
-  )
-
-  if (!isValidTicketList) {
-    throw new Error('Saved ticket data is invalid. Clear WorkHelp ticket data from this browser and reload.')
-  }
-
-  return tickets
-}
-
-export function getTickets() {
-  return readTickets()
-}
-
-export function getTicketById(ticketId) {
-  const ticket = readTickets().find(({ id }) => id === ticketId)
-  return ticket ?? null
-}
-
-export function updateTicketStatus(ticketId, status) {
-  if (!statuses.includes(status)) {
-    throw new Error('Choose a valid ticket status.')
-  }
-
-  const tickets = readTickets()
-  const ticketIndex = tickets.findIndex(({ id }) => id === ticketId)
-  if (ticketIndex === -1) {
-    throw new Error('Ticket not found.')
-  }
-
-  const existingTicket = tickets[ticketIndex]
-  if (existingTicket.status === status) {
-    return existingTicket
-  }
-
-  const now = new Date().toISOString()
-  const updatedTicket = {
-    ...existingTicket,
-    status,
-    updatedAt: now,
-    resolvedAt: status === 'resolved' || status === 'closed'
-      ? existingTicket.resolvedAt ?? now
-      : null,
-  }
-  const updatedTickets = [...tickets]
-  updatedTickets[ticketIndex] = updatedTicket
+  await request('/tickets/import', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ migrationId, tickets: legacyTickets }),
+  })
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTickets))
+    window.localStorage.setItem(IMPORTED_KEY, 'true')
   } catch {
-    throw new Error('Unable to save this status change in your browser. Check your storage settings and try again.')
+    throw new Error('Tickets were imported, but this browser could not save the import marker. Reload to safely retry.')
   }
-
-  return updatedTicket
+  return true
 }
 
-export function createTicket({ title, description, category, priority }) {
-  const trimmedTitle = title.trim()
-  const trimmedDescription = description.trim()
-
-  if (!trimmedTitle || !trimmedDescription) {
-    throw new Error('Enter a title and description before submitting.')
-  }
-
-  if (!categories.includes(category) || !priorities.includes(priority)) {
-    throw new Error('Choose a valid category and priority.')
-  }
-
-  const tickets = readTickets()
-  const numericIds = tickets
-    .map(({ id }) => Number(id.match(/^t-(\d+)$/)?.[1]))
-    .filter(Number.isInteger)
-  let nextId = Math.max(0, ...numericIds) + 1
-  while (tickets.some((ticket) => ticket.id === `t-${nextId}`)) {
-    nextId += 1
-  }
-
-  const now = new Date().toISOString()
-  const ticket = {
-    id: `t-${nextId}`,
-    title: trimmedTitle,
-    description: trimmedDescription,
-    status: 'open',
-    priority,
-    category,
-    requesterId: currentUser.id,
-    requesterName: currentUser.name,
-    requesterEmail: currentUser.email,
-    assigneeId: null,
-    assigneeName: null,
-    createdAt: now,
-    updatedAt: now,
-    resolvedAt: null,
-  }
-  const updatedTickets = [ticket, ...tickets]
-
+async function requestAuthSession() {
+  let response
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTickets))
+    response = await fetch('/api/auth/session', { credentials: 'same-origin' })
   } catch {
-    throw new Error('Unable to save your ticket in this browser. Check your storage settings and try again.')
+    throw new Error('Unable to connect to the WorkHelp API. Start the API server and try again.')
   }
 
-  return ticket
+  if (!response.ok) {
+    throw new Error('Unable to check your sign-in before importing saved tickets.')
+  }
+  return response.json()
+}
+
+function ensureLegacyTicketsImported() {
+  if (!migrationPromise) {
+    migrationPromise = importLegacyTickets().then(
+      (completed) => {
+        if (!completed) migrationPromise = undefined
+      },
+      (error) => {
+        migrationPromise = undefined
+        throw error
+      },
+    )
+  }
+  return migrationPromise
+}
+
+export async function getTickets() {
+  await ensureLegacyTicketsImported()
+  return request('/tickets')
+}
+
+export async function getTicketById(ticketId) {
+  await ensureLegacyTicketsImported()
+  try {
+    return await request(`/tickets/${encodeURIComponent(ticketId)}`)
+  } catch (error) {
+    if (error.status === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+export async function getTicketMessages(ticketId) {
+  await ensureLegacyTicketsImported()
+  return request(`/tickets/${encodeURIComponent(ticketId)}/messages`)
+}
+
+export async function createTicketMessage(ticketId, content) {
+  await ensureLegacyTicketsImported()
+  return request(`/tickets/${encodeURIComponent(ticketId)}/messages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content }),
+  })
+}
+
+export async function updateTicketStatus(ticketId, status) {
+  await ensureLegacyTicketsImported()
+  return request(`/tickets/${encodeURIComponent(ticketId)}/status`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+}
+
+export async function updateTicketAssignment(ticketId, assigned) {
+  await ensureLegacyTicketsImported()
+  return request(`/tickets/${encodeURIComponent(ticketId)}/assignee`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ assigned }),
+  })
+}
+
+export async function createTicket({ title, description, category, priority }) {
+  await ensureLegacyTicketsImported()
+  return request('/tickets', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, description, category, priority }),
+  })
 }

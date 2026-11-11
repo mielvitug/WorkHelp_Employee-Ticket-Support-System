@@ -1,22 +1,23 @@
 .new-ticket-page {
-  max-width: 42rem;
+  max-width: 46rem;
 }
 
 .ticket-form {
   display: grid;
-  gap: 1.25rem;
-  margin-top: 1.5rem;
-  padding: 1.5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  background: #fff;
+  gap: 1.2rem;
+  margin-top: 1.65rem;
+  padding: clamp(1.1rem, 4vw, 1.65rem);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(22, 26, 40, 0.96), rgba(16, 19, 30, 0.96));
+  box-shadow: var(--shadow-card);
 }
 
 .ticket-form-field {
   display: grid;
   gap: 0.5rem;
-  color: #334155;
-  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
   font-weight: 600;
 }
 
@@ -24,25 +25,37 @@
 .ticket-form-field textarea,
 .ticket-form-field select {
   width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  padding: 0.625rem 0.75rem;
-  background: #fff;
-  color: #0f172a;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.65rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface-input);
+  color: var(--text-primary);
   font: inherit;
   font-weight: 400;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.ticket-form-field input::placeholder,
+.ticket-form-field textarea::placeholder {
+  color: var(--text-muted);
 }
 
 .ticket-form-field textarea {
+  min-height: 8rem;
   resize: vertical;
+}
+
+.ticket-form-field select option {
+  background: #151927;
+  color: var(--text-primary);
 }
 
 .ticket-form-field input:focus,
 .ticket-form-field textarea:focus,
 .ticket-form-field select:focus {
-  outline: 2px solid #bfdbfe;
+  border-color: rgba(182, 165, 255, 0.56);
+  outline: 2px solid rgba(182, 165, 255, 0.12);
   outline-offset: 1px;
-  border-color: #93c5fd;
 }
 
 .ticket-form-row {
@@ -56,24 +69,26 @@
   align-items: center;
   justify-content: flex-end;
   gap: 1rem;
+  padding-top: 0.3rem;
 }
 
 .ticket-form-cancel {
-  color: #475569;
-  font-size: 0.875rem;
-  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-weight: 550;
   text-decoration: none;
 }
 
 .ticket-form-cancel:hover {
-  color: #0f172a;
+  color: var(--text-primary);
+}
+
+.ticket-form-submit:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 @media (max-width: 480px) {
-  .ticket-form {
-    padding: 1rem;
-  }
-
   .ticket-form-row {
     grid-template-columns: 1fr;
   }

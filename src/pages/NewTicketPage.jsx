@@ -25,21 +25,26 @@ export function NewTicketPage() {
   const [category, setCategory] = useState('')
   const [priority, setPriority] = useState('medium')
   const [submitError, setSubmitError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
     setSubmitError('')
+    setIsSubmitting(true)
 
     try {
-      createTicket({ title, description, category, priority })
+      await createTicket({ title, description, category, priority })
       navigate('/tickets')
     } catch (error) {
       setSubmitError(error.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
     <section className="new-ticket-page">
+      <p className="page-eyebrow">Let’s get this sorted</p>
       <h1 className="page-title">Create a ticket</h1>
       <p className="page-subtitle">Describe the issue you need help with.</p>
 
@@ -113,7 +118,9 @@ export function NewTicketPage() {
 
         <div className="ticket-form-actions">
           <Link className="ticket-form-cancel" to="/tickets">Cancel</Link>
-          <button className="ticket-form-submit" type="submit">Submit ticket</button>
+          <button className="ticket-form-submit" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Submitting...' : 'Submit ticket'}
+          </button>
         </div>
       </form>
     </section>

@@ -1,7 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useAuth } from '../auth/useAuth'
 import { Badge } from '../components/ui/Badge'
-import { getTicketById, updateTicketStatus } from '../data/ticketStorage'
+import {
+  createTicketMessage,
+  getTicketById,
+  getTicketMessages,
+  updateTicketAssignment,
+  updateTicketStatus,
+} from '../data/ticketStorage'
 import './TicketDetailPage.css'
 
 const categoryLabels = {
@@ -33,27 +40,131 @@ const statusOptions = [
   { value: 'closed', label: 'Closed' },
 ]
 
+const statusLabels = {
+  open: 'Open',
+  in_progress: 'In progress',
+  resolved: 'Resolved',
+  closed: 'Closed',
+}
+
+const statusTones = {
+  open: 'info',
+  in_progress: 'warning',
+  resolved: 'success',
+  closed: 'neutral',
+}
+
 function formatDate(value) {
   return new Date(value).toLocaleString()
 }
 
 export function TicketDetailPage() {
+  const { user } = useAuth()
   const { ticketId } = useParams()
-  const [ticketState, setTicketState] = useState(() => {
-    try {
-      return { ticket: getTicketById(ticketId), error: '' }
-    } catch (error) {
-      return { ticket: null, error: error.message }
-    }
+  const [ticketState, setTicketState] = useState({ ticket: null, error: '', loading: true, ticketId: null })
+  const [conversationState, setConversationState] = useState({
+    messages: null,
+    error: '',
+    loading: true,
+    ticketId: null,
   })
+  const [statusSaving, setStatusSaving] = useState(false)
+  const [assignmentSaving, setAssignmentSaving] = useState(false)
+  const [replyDraft, setReplyDraft] = useState({ ticketId: null, value: '' })
+  const [replyErrorState, setReplyErrorState] = useState({ ticketId: null, error: '' })
+  const [replySaving, setReplySaving] = useState(false)
+  const reply = replyDraft.ticketId === ticketId ? replyDraft.value : ''
+  const replyError = replyErrorState.ticketId === ticketId ? replyErrorState.error : ''
 
-  const updateStatus = (event) => {
+  useEffect(() => {
+    let active = true
+    getTicketById(ticketId).then(
+      (ticket) => {
+        if (!active) return
+        setTicketState({ ticket, error: '', loading: false, ticketId })
+        if (!ticket) {
+          setConversationState({ messages: [], error: '', loading: false, ticketId })
+          return
+        }
+        getTicketMessages(ticketId).then(
+          (messages) => {
+            if (active) setConversationState({ messages, error: '', loading: false, ticketId })
+          },
+          (error) => {
+            if (active) setConversationState({ messages: null, error: error.message, loading: false, ticketId })
+          },
+        )
+      },
+      (error) => {
+        if (active) {
+          setTicketState({ ticket: null, error: error.message, loading: false, ticketId })
+          setConversationState({ messages: null, error: '', loading: false, ticketId })
+        }
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [ticketId])
+
+  const updateStatus = async (event) => {
+    setStatusSaving(true)
     try {
-      const ticket = updateTicketStatus(ticketId, event.target.value)
-      setTicketState({ ticket, error: '' })
+      const ticket = await updateTicketStatus(ticketId, event.target.value)
+      setTicketState({ ticket, error: '', loading: false, ticketId })
     } catch (error) {
       setTicketState((current) => ({ ...current, error: error.message }))
+    } finally {
+      setStatusSaving(false)
     }
+  }
+
+  const updateAssignment = async (assigned) => {
+    setAssignmentSaving(true)
+    try {
+      const ticket = await updateTicketAssignment(ticketId, assigned)
+      setTicketState({ ticket, error: '', loading: false, ticketId })
+    } catch (error) {
+      setTicketState((current) => ({ ...current, error: error.message }))
+    } finally {
+      setAssignmentSaving(false)
+    }
+  }
+
+  const submitReply = async (event) => {
+    event.preventDefault()
+    const content = reply.trim()
+    if (!content || replySaving) return
+
+    setReplyErrorState({ ticketId, error: '' })
+    setReplySaving(true)
+    try {
+      const message = await createTicketMessage(ticketId, content)
+      setConversationState((current) => ({
+        messages: [...(current.messages ?? []), message],
+        error: '',
+        loading: false,
+        ticketId,
+      }))
+      setTicketState((current) => ({
+        ...current,
+        ticket: current.ticket ? { ...current.ticket, updatedAt: message.createdAt } : null,
+      }))
+      setReplyDraft({ ticketId, value: '' })
+    } catch (error) {
+      setReplyErrorState({ ticketId, error: error.message })
+    } finally {
+      setReplySaving(false)
+    }
+  }
+
+  if (ticketState.loading || ticketState.ticketId !== ticketId) {
+    return (
+      <section>
+        <h1 className="page-title">Ticket details</h1>
+        <p className="page-subtitle" role="status">Loading ticket...</p>
+      </section>
+    )
   }
 
   if (ticketState.error && !ticketState.ticket) {
@@ -83,6 +194,7 @@ export function TicketDetailPage() {
       <Link className="ticket-detail-back" to="/tickets">← Back to tickets</Link>
       <div className="ticket-detail-header">
         <div>
+          <p className="page-eyebrow">Ticket overview</p>
           <p className="ticket-detail-id">Ticket #{ticket.id.replace('t-', '')}</p>
           <h1 className="page-title">{ticket.title}</h1>
         </div>
@@ -93,7 +205,7 @@ export function TicketDetailPage() {
 
       <div className="ticket-detail-content">
         <section className="ticket-detail-description">
-          <h2>Description</h2>
+          <h2>Issue summary</h2>
           <p>{ticket.description}</p>
         </section>
 
@@ -103,18 +215,23 @@ export function TicketDetailPage() {
             <div>
               <dt>Status</dt>
               <dd>
-                <select
-                  aria-label="Ticket status"
-                  className="ticket-status-select"
-                  value={ticket.status}
-                  onChange={updateStatus}
-                >
-                  {statusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                {user.role === 'support' ? (
+                  <select
+                    aria-label="Ticket status"
+                    className="ticket-status-select"
+                    value={ticket.status}
+                    onChange={updateStatus}
+                    disabled={statusSaving}
+                  >
+                    {statusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Badge tone={statusTones[ticket.status]}>{statusLabels[ticket.status]}</Badge>
+                )}
               </dd>
             </div>
             <div>
@@ -127,7 +244,23 @@ export function TicketDetailPage() {
             </div>
             <div>
               <dt>Assignee</dt>
-              <dd>{ticket.assigneeName ?? 'Unassigned'}</dd>
+              <dd className="ticket-assignee-value">
+                <span>{ticket.assigneeName ?? 'Unassigned'}</span>
+                {user.role === 'support' && (
+                  <button
+                    className="ticket-assignment-button"
+                    type="button"
+                    onClick={() => updateAssignment(ticket.assigneeId !== user.id)}
+                    disabled={assignmentSaving}
+                  >
+                    {assignmentSaving
+                      ? 'Saving...'
+                      : ticket.assigneeId === user.id
+                        ? 'Unassign me'
+                        : 'Assign to me'}
+                  </button>
+                )}
+              </dd>
             </div>
             <div>
               <dt>Created</dt>
@@ -146,6 +279,84 @@ export function TicketDetailPage() {
           </dl>
         </section>
       </div>
+
+      <section className="ticket-conversation" aria-labelledby="ticket-conversation-heading">
+        <div className="ticket-conversation-header">
+          <div>
+            <p className="page-eyebrow">Keep the conversation going</p>
+            <h2 id="ticket-conversation-heading">Replies</h2>
+          </div>
+          <span className="ticket-conversation-count">
+            {conversationState.messages?.length ?? 0}
+          </span>
+        </div>
+
+        {conversationState.loading || conversationState.ticketId !== ticketId ? (
+          <p className="ticket-conversation-status" role="status">Loading replies...</p>
+        ) : conversationState.error ? (
+          <p className="ticket-storage-error" role="alert">{conversationState.error}</p>
+        ) : conversationState.messages.length === 0 ? (
+          <p className="ticket-conversation-empty">No replies yet. Add a message to start the conversation.</p>
+        ) : (
+          <ol className="ticket-message-list">
+            {conversationState.messages.map((message) => (
+              <li
+                className={`ticket-message ${message.authorRole === 'support' ? 'ticket-message-support' : 'ticket-message-employee'}${message.authorId === user.id ? ' ticket-message-own' : ''}`}
+                key={message.id}
+              >
+                <article className="ticket-message-card">
+                  <header className="ticket-message-header">
+                    <div className="ticket-message-author">
+                      <span className="ticket-message-avatar" aria-hidden="true">
+                        {message.authorName.charAt(0)}
+                      </span>
+                      <strong>{message.authorName}</strong>
+                      <Badge tone={message.authorRole === 'support' ? 'success' : 'neutral'}>
+                        {message.authorRole}
+                      </Badge>
+                    </div>
+                    <time className="ticket-message-time" dateTime={message.createdAt}>
+                      {formatDate(message.createdAt)}
+                    </time>
+                  </header>
+                  <p className="ticket-message-content">{message.content}</p>
+                </article>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        <form className="ticket-reply-form" onSubmit={submitReply}>
+          <label className="ticket-reply-label" htmlFor="ticket-reply">Add a reply</label>
+          <textarea
+            id="ticket-reply"
+            className="ticket-reply-input"
+            value={reply}
+            onChange={(event) => setReplyDraft({ ticketId, value: event.target.value })}
+            placeholder="Write a message for the requester and support team..."
+            maxLength={2000}
+            rows={4}
+            required
+          />
+          {replyError && <p className="ticket-storage-error" role="alert">{replyError}</p>}
+          <div className="ticket-reply-footer">
+            <span className="ticket-reply-note">Visible to the requester and support team</span>
+            <button
+              className="ticket-reply-submit"
+              type="submit"
+              disabled={
+                replySaving ||
+                !reply.trim() ||
+                conversationState.loading ||
+                conversationState.ticketId !== ticketId ||
+                Boolean(conversationState.error)
+              }
+            >
+              {replySaving ? 'Sending...' : 'Send reply'}
+            </button>
+          </div>
+        </form>
+      </section>
 
       {ticketState.error && (
         <p className="ticket-storage-error" role="alert">{ticketState.error}</p>
