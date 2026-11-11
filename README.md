@@ -1,9 +1,10 @@
 # WorkHelp
 
-Employee Ticket Support System built with React, JavaScript, Vite, React Router DOM,
-and a local Express/SQLite API.
+Employee Ticket Support System built with React, JavaScript, Vite, and React Router
+DOM. The deployed frontend stores its demo accounts, tickets, and replies in the
+current browser; it does not connect to a hosted API or shared database.
 
-## Local setup
+## Run and deploy
 
 Install dependencies:
 
@@ -11,85 +12,41 @@ Install dependencies:
 npm install
 ```
 
-For a local demo, the API automatically seeds these shared accounts when it creates
-a new database:
+Start the frontend locally:
+
+```sh
+npm run dev
+```
+
+The Vercel project can use the Vite preset, build command `npm run build`, and
+output directory `dist`. No API URL or Vercel environment variable is needed for
+this browser-local demo.
+
+Each browser starts with these demo accounts:
 
 | Role | Email | Password |
 |---|---|---|
 | Employee | `mia.santos@example.com` | `DemoEmployee!2026` |
 | Support | `alex.cruz@example.com` | `DemoSupport!2026` |
 
-The development login page also shows these sign-ins and can fill them in for you.
-They are for local demos only; do not use them with sensitive data or a hosted app.
-The API does not use these defaults when `NODE_ENV=production`.
-
-To use your own passwords instead, provide them in the API terminal before the
-database is first initialized. Passwords must be at least 12 characters:
-
-```powershell
-$env:WORKHELP_EMPLOYEE_PASSWORD = Read-Host "Initial employee password"
-$env:WORKHELP_SUPPORT_PASSWORD = Read-Host "Initial support password"
-npm run dev:api
-```
-
-If either password is too short, the API startup error names the environment
-variable and reports its character count without displaying the password.
-
-Account passwords are used only when the database is first initialized. Existing
-databases keep their current account passwords; demo credentials do not overwrite
-them. Changing environment variables later also does not change an existing
-account password. Do not commit personal passwords or reuse them elsewhere.
-
-If this database was already initialized and you want to switch its seeded accounts
-to the local demo passwords, stop the API and run:
-
-```powershell
-npm run reset:demo-accounts
-```
-
-This resets only the seeded Employee and Support passwords, signs those accounts
-out, and preserves tickets. It is disabled when `NODE_ENV=production`.
-
-In a second terminal, start the frontend:
-
-```sh
-npm run dev
-```
-
-Vite proxies `/api` requests to the API at `127.0.0.1:3001`. Ticket, account, and
-session records are stored in the ignored `server/data/workhelp.sqlite` file.
-Existing localStorage tickets are imported once, when an employee first loads
-tickets after signing in; the local copy remains as a backup.
-
 ## Roles and sessions
 
-- Employees can register with their own email address, create and view their own
-  tickets, and change their password from Account settings.
-- Employee passwords must be 12–35 characters. Password changes require the
-  current password; they keep the current session active and sign out other
-  sessions for that account.
-- Public registration creates Employee accounts only. Support accounts remain
-  restricted to the seeded account; registration does not include email
-  verification or forgotten-password recovery.
-- Employees can read and reply to their own ticket conversations. Replies remain
-  available after a ticket is closed.
-- Support users can view all tickets, assign or unassign tickets to themselves,
-  filter the list to tickets assigned to them, update ticket statuses, and reply
-  to any ticket conversation.
-- Sessions are stored server-side in SQLite and use HttpOnly, SameSite=Strict cookies
-  with a seven-day lifetime. Cookies are marked Secure when `NODE_ENV=production`.
-
-Forgotten-password email recovery is not implemented. Although employee
-registration is available, this prototype has no production deployment setup. The
-API binds to localhost and must not be exposed to an untrusted network. A public
-deployment needs HTTPS, appropriate secure-cookie configuration, operational secret
-management, and deployment/security review.
+- Employees can register in a browser, create and view their own tickets, reply to
+  their conversations, and change their password.
+- Support can view all tickets created in that same browser, assign tickets,
+  update statuses, reply, and archive or restore tickets.
+- Tickets and replies are kept in that browser's local storage and survive reloads.
+  They do not sync to another browser, device, or person. To demonstrate both roles
+  against the same tickets, sign out and switch roles in the same browser.
+- Clearing site data removes that browser's accounts, tickets, and replies.
+- This is a demo, not secure account storage: anyone with access to the browser can
+  inspect or modify its data. Do not enter sensitive or real employee information.
+- Email verification and password recovery are not available.
 
 ## Available scripts
 
 - `npm run dev` starts the Vite frontend.
-- `npm run dev:api` starts the local API and initializes the SQLite database/accounts.
 - `npm run build` creates a production frontend build.
 - `npm run preview` previews the production build.
 - `npm run lint` runs Oxlint.
-- `npm run test:api` runs backend and API-client integration tests.
+- `npm run test:api` runs API and browser-storage tests.

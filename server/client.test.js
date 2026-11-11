@@ -1,141 +1,96 @@
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
 import test from 'node:test'
-import { createApp } from './app.js'
-import { mockTickets } from '../src/data/mockData.js'
 import { filterTickets } from '../src/data/ticketQueries.js'
 
-test('frontend API client imports legacy tickets once and uses shared data thereafter', async () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'workhelp-client-'))
-  const credentials = {
-    employeePassword: 'employee-test-password',
-    supportPassword: 'support-test-password',
-  }
-  const app = createApp(path.join(directory, 'tickets.sqlite'), { seedCredentials: credentials })
-  const server = app.listen(0, '127.0.0.1')
-  await new Promise((resolve) => server.once('listening', resolve))
-  const address = server.address()
-  const baseUrl = `http://127.0.0.1:${address.port}`
+test('frontend auth and ticket data stay in this browser without an API', async () => {
   const values = new Map()
-  const localTickets = structuredClone(mockTickets)
-  localTickets[0].status = 'in_progress'
-  localTickets.push({
-    ...mockTickets[0],
-    id: 't-7',
-    title: 'Saved only in this browser',
-  })
-
-  const originalFetch = globalThis.fetch
-  const loginResponse = await originalFetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'mia.santos@example.com', password: credentials.employeePassword }),
-  })
-  let cookie = loginResponse.headers.get('set-cookie').split(';')[0]
-  globalThis.fetch = async (input, options = {}) => {
-    const response = await originalFetch(new URL(input, baseUrl), {
-      ...options,
-      headers: { ...(options.headers ?? {}), cookie },
-    })
-    const setCookie = response.headers.get('set-cookie')
-    if (setCookie) cookie = setCookie.split(';')[0]
-    return response
-  }
   globalThis.window = {
-    crypto: { randomUUID: () => 'client-migration-1' },
     localStorage: {
       getItem(key) { return values.get(key) ?? null },
       setItem(key, value) { values.set(key, value) },
+      removeItem(key) { values.delete(key) },
     },
   }
-  values.set('workhelp:tickets', JSON.stringify(localTickets))
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = () => {
+    throw new Error('The browser-local app must not call the API.')
+  }
 
   try {
-    const api = await import('../src/data/ticketStorage.js')
-    const authApi = await import('../src/data/authApi.js')
-    assert.equal((await authApi.getCurrentUser()).role, 'employee')
-    await authApi.signOut()
-    assert.equal(await authApi.getCurrentUser(), null)
-    assert.equal((await authApi.signIn('mia.santos@example.com', credentials.employeePassword)).id, 'u-1')
+    const auth = await import('../src/data/authApi.js')
+    const ticketsApi = await import('../src/data/ticketStorage.js')
+    assert.equal(await auth.getCurrentUser(), null)
 
-    const firstRead = await api.getTickets()
-    assert.equal(firstRead.length, 8)
-    assert.equal(firstRead.filter(({ title }) => title === 'Saved only in this browser').length, 1)
-    assert.equal(firstRead.find(({ id }) => id === 't-1').status, 'open')
-    assert.equal(firstRead.find(({ id }) => id === 't-7').status, 'in_progress')
-    assert.equal(values.get('workhelp:tickets-imported-to-api'), 'true')
+    const employee = await auth.signIn(' Mia.Santos@example.com ', 'DemoEmployee!2026')
+    assert.equal(employee.role, 'employee')
+    assert.equal((await ticketsApi.getTickets()).length, 6)
 
-    await api.createTicket({
-      title: 'Created through frontend client',
-      description: 'Client sends this to the shared API.',
+    const created = await ticketsApi.createTicket({
+      title: 'Saved only in this browser',
+      description: 'This ticket should survive reloading this browser.',
       category: 'software',
       priority: 'urgent',
     })
-    const ticketsAfterCreate = await api.getTickets()
-    const created = ticketsAfterCreate.find(({ title }) => title === 'Created through frontend client')
-    assert.ok(created)
-    assert.equal((await api.getTicketById(created.id)).id, created.id)
-    const employeeMessage = await api.createTicketMessage(created.id, 'Please let me know when there is an update.')
-    assert.equal(employeeMessage.authorRole, 'employee')
-    assert.equal((await api.getTicketMessages(created.id))[0].id, employeeMessage.id)
+    assert.equal(created.requesterId, employee.id)
+    const reply = await ticketsApi.createTicketMessage(created.id, 'Please take a look.')
+    assert.equal(reply.authorRole, 'employee')
+    assert.equal((await ticketsApi.getTicketMessages(created.id))[0].id, reply.id)
 
-    const supportLogin = await originalFetch(`${baseUrl}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: 'alex.cruz@example.com', password: credentials.supportPassword }),
-    })
-    cookie = supportLogin.headers.get('set-cookie').split(';')[0]
-    const supportMessage = await api.createTicketMessage(created.id, 'We are checking this request.')
-    const conversation = await api.getTicketMessages(created.id)
-    assert.deepEqual(conversation.map(({ authorRole }) => authorRole), ['employee', 'support'])
-    assert.equal(supportMessage.authorRole, 'support')
-    const beforeAssignment = await api.getTicketById(created.id)
-    const assigned = await api.updateTicketAssignment(created.id, true)
-    assert.equal(assigned.assigneeId, 'u-2')
-    assert.equal(assigned.status, beforeAssignment.status)
-    assert.equal((await api.getTicketById(created.id)).assigneeId, 'u-2')
-    assert.equal((await api.updateTicketStatus(created.id, 'resolved')).status, 'resolved')
-    await api.updateTicketAssignment(created.id, false)
-    assert.equal(await api.getTicketById('unknown-ticket'), null)
+    await auth.signOut()
+    const support = await auth.signIn('alex.cruz@example.com', 'DemoSupport!2026')
+    assert.equal(support.role, 'support')
+    const supportTickets = await ticketsApi.getTickets()
+    assert.equal(supportTickets.length, 7)
+    const assigned = await ticketsApi.updateTicketAssignment(created.id, true)
+    assert.equal(assigned.assigneeId, support.id)
+    assert.equal((await ticketsApi.getTicketMessages(created.id))[0].authorRole, 'employee')
 
-    const allTickets = await api.getTickets()
-    const assignedTickets = filterTickets(allTickets, {
-      query: '',
+    const archived = await ticketsApi.updateTicketArchived(created.id, true)
+    assert.ok(archived.archivedAt)
+    assert.equal((await ticketsApi.getTickets()).length, 6)
+    assert.equal((await ticketsApi.getTickets({ archived: true }))[0].id, created.id)
+    await assert.rejects(
+      ticketsApi.createTicketMessage(created.id, 'This should not be sent.'),
+      /Restore this ticket/,
+    )
+    await ticketsApi.updateTicketArchived(created.id, false)
+
+    const filtered = filterTickets(await ticketsApi.getTickets(), {
+      query: 'saved only',
       status: 'all',
       priority: 'all',
-      assigneeId: 'u-2',
+      assigneeId: support.id,
     })
-    assert.equal(assignedTickets.length, 4)
-    assert.ok(assignedTickets.every(({ assigneeId }) => assigneeId === 'u-2'))
-    assert.equal(filterTickets(allTickets, {
-      query: '',
-      status: 'all',
-      priority: 'all',
-      assigneeId: null,
-    }).length, allTickets.length)
+    assert.deepEqual(filtered.map(({ id }) => id), [created.id])
+    assert.ok(values.has('workhelp:browser-tickets'))
+    assert.ok(values.has('workhelp:browser-messages'))
+    assert.ok(values.get('workhelp:local-accounts').includes('"passwordHash"'))
+    assert.equal(values.get('workhelp:local-accounts').includes('"password":"'), false)
 
-    const registeredUser = await authApi.registerEmployee({
-      name: 'Client Registered',
-      email: '  client.registered@example.com ',
-      password: 'Client Password 123',
+    await auth.changePassword('DemoSupport!2026', 'UpdatedSupport!2026')
+    await auth.signOut()
+    await assert.rejects(auth.signIn('alex.cruz@example.com', 'DemoSupport!2026'), /incorrect/)
+    assert.equal((await auth.signIn('alex.cruz@example.com', 'UpdatedSupport!2026')).role, 'support')
+    await ticketsApi.updateTicketArchived(created.id, true)
+    await auth.signOut()
+    await assert.rejects(ticketsApi.getTickets({ archived: true }), /Sign in/)
+
+    const registered = await auth.registerEmployee({
+      name: 'Browser User',
+      email: '  browser.user@example.com ',
+      password: 'BrowserPassword!2026',
     })
-    assert.equal(registeredUser.role, 'employee')
-    assert.equal(registeredUser.email, 'client.registered@example.com')
-    await authApi.changePassword('Client Password 123', 'Changed Password 123')
-    await authApi.signOut()
+    assert.equal(registered.email, 'browser.user@example.com')
+    assert.equal((await ticketsApi.getTickets()).length, 0)
+    await assert.rejects(ticketsApi.updateTicketArchived(created.id, false), /Only support/)
+    await auth.changePassword('BrowserPassword!2026', 'NewBrowserPassword!2026')
+    await auth.signOut()
     assert.equal(
-      (await authApi.signIn('client.registered@example.com', 'Changed Password 123')).id,
-      registeredUser.id,
+      (await auth.signIn('browser.user@example.com', 'NewBrowserPassword!2026')).id,
+      registered.id,
     )
   } finally {
     globalThis.fetch = originalFetch
     delete globalThis.window
-    await new Promise((resolve, reject) => {
-      server.close((error) => error ? reject(error) : resolve())
-    })
-    app.locals.db.close()
-    fs.rmSync(directory, { recursive: true, force: true })
   }
 })

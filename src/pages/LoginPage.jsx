@@ -56,33 +56,31 @@ export function LoginPage() {
       <h1 className="page-title">Welcome back.</h1>
       <p className="page-subtitle">Sign in to pick up where you left off.</p>
 
-      {import.meta.env.DEV && (
-        <aside className="demo-signins" aria-labelledby="demo-signins-title">
-          <div className="demo-signins-heading">
-            <h2 id="demo-signins-title">Local demo sign-ins</h2>
-            <p>Choose an account to fill the sign-in form.</p>
-          </div>
-          <div className="demo-account-list">
-            {Object.entries(demoAccounts).map(([role, account]) => (
-              <section className="demo-account" key={role} aria-label={`${role} demo account`}>
-                <div>
-                  <span className="demo-account-role">{role}</span>
-                  <p><span>Email</span><code>{account.email}</code></p>
-                  <p><span>Password</span><code>{account.password}</code></p>
-                </div>
-                <button
-                  type="button"
-                  className="demo-account-use"
-                  onClick={() => handleUseDemoAccount(account)}
-                >
-                  Use account
-                </button>
-              </section>
-            ))}
-          </div>
-          <p className="demo-signins-note">Shared demo accounts for local use only. Don’t use with sensitive data.</p>
-        </aside>
-      )}
+      <aside className="demo-signins" aria-labelledby="demo-signins-title">
+        <div className="demo-signins-heading">
+          <h2 id="demo-signins-title">Browser-local demo accounts</h2>
+          <p>Choose an account to fill the sign-in form.</p>
+        </div>
+        <div className="demo-account-list">
+          {Object.entries(demoAccounts).map(([role, account]) => (
+            <section className="demo-account" key={role} aria-label={`${role} demo account`}>
+              <div>
+                <span className="demo-account-role">{role}</span>
+                <p><span>Email</span><code>{account.email}</code></p>
+                <p><span>Password</span><code>{account.password}</code></p>
+              </div>
+              <button
+                type="button"
+                className="demo-account-use"
+                onClick={() => handleUseDemoAccount(account)}
+              >
+                Use account
+              </button>
+            </section>
+          ))}
+        </div>
+        <p className="demo-signins-note">Each browser stores its own accounts and tickets. Nothing syncs between users or devices; don’t enter sensitive data.</p>
+      </aside>
 
       {sessionError && (
         <p className="login-error" role="alert">{sessionError}</p>

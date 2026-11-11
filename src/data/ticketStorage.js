@@ -1,177 +1,228 @@
-const LEGACY_TICKETS_KEY = 'workhelp:tickets'
-const IMPORTED_KEY = 'workhelp:tickets-imported-to-api'
-const MIGRATION_ID_KEY = 'workhelp:tickets-migration-id'
-let migrationPromise
+import { getCurrentUser } from './authApi.js'
+import { mockTickets } from './mockData.js'
 
-async function request(path, options) {
-  let response
+const ticketsKey = 'workhelp:browser-tickets'
+const messagesKey = 'workhelp:browser-messages'
+const legacyTicketsKey = 'workhelp:tickets'
+const statuses = new Set(['open', 'in_progress', 'resolved', 'closed'])
+const priorities = new Set(['low', 'medium', 'high', 'urgent'])
+const categories = new Set(['hardware', 'software', 'network', 'access', 'other'])
+const maxMessageLength = 2000
+
+function readJson(key, fallback) {
   try {
-    response = await fetch(`/api${path}`, options)
+    const stored = window.localStorage.getItem(key)
+    return stored === null ? fallback : JSON.parse(stored)
   } catch {
-    throw new Error('Unable to connect to the WorkHelp API. Start the API server and try again.')
+    throw new Error('Unable to read WorkHelp data from this browser. Check browser storage settings and try again.')
   }
-
-  if (!response.headers.get('content-type')?.includes('application/json')) {
-    throw new Error(
-      `The WorkHelp API returned a non-JSON response (HTTP ${response.status}). Start the API on 127.0.0.1:3001, then restart Vite.`,
-    )
-  }
-
-  let body
-  try {
-    body = await response.json()
-  } catch {
-    throw new Error('The WorkHelp API returned an invalid response.')
-  }
-
-  if (!response.ok) {
-    const error = new Error(body.error ?? 'The WorkHelp API request failed.')
-    error.status = response.status
-    throw error
-  }
-
-  return body
 }
 
-async function importLegacyTickets() {
-  let imported
-  let legacyTickets
-  let migrationId
-
-  const { user } = await requestAuthSession()
-  if (user?.role !== 'employee') {
-    return false
-  }
-
+function writeJson(key, value) {
   try {
-    imported = window.localStorage.getItem(IMPORTED_KEY)
-    if (imported === 'true') {
-      return
-    }
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    throw new Error('Unable to save WorkHelp data in this browser. Check available storage and privacy settings.')
+  }
+}
 
-    const serializedTickets = window.localStorage.getItem(LEGACY_TICKETS_KEY)
-    if (serializedTickets === null) {
-      window.localStorage.setItem(IMPORTED_KEY, 'true')
-      return
-    }
-
-    legacyTickets = JSON.parse(serializedTickets)
-    if (!Array.isArray(legacyTickets)) {
-      throw new Error('Saved browser ticket data is invalid. It has not been imported.')
-    }
-
-    migrationId = window.localStorage.getItem(MIGRATION_ID_KEY)
-    if (!migrationId) {
-      migrationId = window.crypto.randomUUID()
-      window.localStorage.setItem(MIGRATION_ID_KEY, migrationId)
-    }
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error('Saved browser ticket data is invalid JSON. It has not been imported.')
-    }
-    if (error instanceof Error && error.message.includes('has not been imported')) {
-      throw error
-    }
-    throw new Error('Unable to read or mark saved browser tickets for import.')
+function readTickets() {
+  const saved = readJson(ticketsKey, null)
+  if (saved !== null) {
+    if (!Array.isArray(saved)) throw new Error('Saved tickets are invalid. Clear this site’s browser data to start over.')
+    return saved
   }
 
-  await request('/tickets/import', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ migrationId, tickets: legacyTickets }),
+  const legacy = readJson(legacyTicketsKey, null)
+  if (legacy !== null && !Array.isArray(legacy)) {
+    throw new Error('Saved browser ticket data is invalid. It has not been replaced.')
+  }
+  const initialTickets = legacy ?? mockTickets
+  const tickets = initialTickets.map((ticket) => ({ archivedAt: null, ...ticket }))
+  writeJson(ticketsKey, tickets)
+  return tickets
+}
+
+function readMessages() {
+  const messages = readJson(messagesKey, {})
+  if (!messages || Array.isArray(messages) || typeof messages !== 'object') {
+    throw new Error('Saved ticket replies are invalid. Clear this site’s browser data to start over.')
+  }
+  return messages
+}
+
+function writeTickets(tickets) {
+  writeJson(ticketsKey, tickets)
+}
+
+function requireUser() {
+  return getCurrentUser().then((user) => {
+    if (!user) throw new Error('Sign in to use tickets.')
+    return user
   })
-
-  try {
-    window.localStorage.setItem(IMPORTED_KEY, 'true')
-  } catch {
-    throw new Error('Tickets were imported, but this browser could not save the import marker. Reload to safely retry.')
-  }
-  return true
 }
 
-async function requestAuthSession() {
-  let response
-  try {
-    response = await fetch('/api/auth/session', { credentials: 'same-origin' })
-  } catch {
-    throw new Error('Unable to connect to the WorkHelp API. Start the API server and try again.')
-  }
-
-  if (!response.ok) {
-    throw new Error('Unable to check your sign-in before importing saved tickets.')
-  }
-  return response.json()
+function findAccessibleTicket(tickets, user, ticketId) {
+  const ticket = tickets.find(({ id }) => id === ticketId)
+  if (!ticket || (user.role !== 'support' && ticket.requesterId !== user.id)) return null
+  return ticket
 }
 
-function ensureLegacyTicketsImported() {
-  if (!migrationPromise) {
-    migrationPromise = importLegacyTickets().then(
-      (completed) => {
-        if (!completed) migrationPromise = undefined
-      },
-      (error) => {
-        migrationPromise = undefined
-        throw error
-      },
-    )
+export async function getTickets({ archived = false } = {}) {
+  const user = await requireUser()
+  if (archived && user.role !== 'support') {
+    throw new Error('Only support users may view archived tickets.')
   }
-  return migrationPromise
-}
-
-export async function getTickets() {
-  await ensureLegacyTicketsImported()
-  return request('/tickets')
+  return readTickets().filter((ticket) => {
+    const owned = user.role === 'support' || ticket.requesterId === user.id
+    return owned && Boolean(ticket.archivedAt) === archived
+  })
 }
 
 export async function getTicketById(ticketId) {
-  await ensureLegacyTicketsImported()
-  try {
-    return await request(`/tickets/${encodeURIComponent(ticketId)}`)
-  } catch (error) {
-    if (error.status === 404) {
-      return null
-    }
-    throw error
-  }
+  const user = await requireUser()
+  const ticket = findAccessibleTicket(readTickets(), user, ticketId)
+  if (!ticket || (user.role !== 'support' && ticket.archivedAt)) return null
+  return ticket
 }
 
 export async function getTicketMessages(ticketId) {
-  await ensureLegacyTicketsImported()
-  return request(`/tickets/${encodeURIComponent(ticketId)}/messages`)
+  const user = await requireUser()
+  const ticket = findAccessibleTicket(readTickets(), user, ticketId)
+  if (!ticket || (user.role !== 'support' && ticket.archivedAt)) {
+    throw new Error('Ticket not found.')
+  }
+  const conversation = readMessages()[ticketId] ?? []
+  if (!Array.isArray(conversation)) {
+    throw new Error('Saved replies for this ticket are invalid.')
+  }
+  return conversation
 }
 
 export async function createTicketMessage(ticketId, content) {
-  await ensureLegacyTicketsImported()
-  return request(`/tickets/${encodeURIComponent(ticketId)}/messages`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content }),
-  })
+  const user = await requireUser()
+  const tickets = readTickets()
+  const ticket = findAccessibleTicket(tickets, user, ticketId)
+  if (!ticket) throw new Error('Ticket not found.')
+  if (ticket.archivedAt) throw new Error('Restore this ticket before adding a reply.')
+  if (typeof content !== 'string' || !content.trim() || content.trim().length > maxMessageLength) {
+    throw new Error(`Reply must contain 1 to ${maxMessageLength} characters.`)
+  }
+
+  const messages = readMessages()
+  const conversation = messages[ticketId] ?? []
+  if (!Array.isArray(conversation)) {
+    throw new Error('Saved replies for this ticket are invalid.')
+  }
+  const message = {
+    id: conversation.reduce((highest, item) => Math.max(highest, item.id), 0) + 1,
+    authorId: user.id,
+    authorName: user.name,
+    authorRole: user.role,
+    content: content.trim(),
+    createdAt: new Date().toISOString(),
+  }
+  writeJson(messagesKey, { ...messages, [ticketId]: [...conversation, message] })
+  writeTickets(tickets.map((item) => item.id === ticketId
+    ? { ...item, updatedAt: message.createdAt }
+    : item))
+  return message
 }
 
 export async function updateTicketStatus(ticketId, status) {
-  await ensureLegacyTicketsImported()
-  return request(`/tickets/${encodeURIComponent(ticketId)}/status`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ status }),
-  })
+  const user = await requireUser()
+  if (user.role !== 'support') throw new Error('Only support users may update ticket status.')
+  if (!statuses.has(status)) throw new Error('Choose a valid ticket status.')
+  const tickets = readTickets()
+  const ticket = tickets.find(({ id }) => id === ticketId)
+  if (!ticket) throw new Error('Ticket not found.')
+  if (ticket.archivedAt) throw new Error('Restore this ticket before updating its status.')
+  if (ticket.status === status) return ticket
+
+  const now = new Date().toISOString()
+  const updated = {
+    ...ticket,
+    status,
+    updatedAt: now,
+    resolvedAt: status === 'resolved' || status === 'closed'
+      ? ticket.resolvedAt ?? now
+      : null,
+  }
+  writeTickets(tickets.map((item) => item.id === ticketId ? updated : item))
+  return updated
 }
 
 export async function updateTicketAssignment(ticketId, assigned) {
-  await ensureLegacyTicketsImported()
-  return request(`/tickets/${encodeURIComponent(ticketId)}/assignee`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ assigned }),
-  })
+  const user = await requireUser()
+  if (user.role !== 'support') throw new Error('Only support users may update ticket assignments.')
+  const tickets = readTickets()
+  const ticket = tickets.find(({ id }) => id === ticketId)
+  if (!ticket) throw new Error('Ticket not found.')
+  if (ticket.archivedAt) throw new Error('Restore this ticket before updating its assignment.')
+  if (typeof assigned !== 'boolean') throw new Error('Choose whether to assign this ticket to yourself.')
+
+  const assigneeId = assigned ? user.id : null
+  const assigneeName = assigned ? user.name : null
+  if (ticket.assigneeId === assigneeId && ticket.assigneeName === assigneeName) return ticket
+  const updated = {
+    ...ticket,
+    assigneeId,
+    assigneeName,
+    updatedAt: new Date().toISOString(),
+  }
+  writeTickets(tickets.map((item) => item.id === ticketId ? updated : item))
+  return updated
+}
+
+export async function updateTicketArchived(ticketId, archived) {
+  const user = await requireUser()
+  if (user.role !== 'support') throw new Error('Only support users may archive tickets.')
+  if (typeof archived !== 'boolean') throw new Error('Choose whether to archive this ticket.')
+  const tickets = readTickets()
+  const ticket = tickets.find(({ id }) => id === ticketId)
+  if (!ticket) throw new Error('Ticket not found.')
+  if (Boolean(ticket.archivedAt) === archived) return ticket
+
+  const now = new Date().toISOString()
+  const updated = { ...ticket, archivedAt: archived ? now : null, updatedAt: now }
+  writeTickets(tickets.map((item) => item.id === ticketId ? updated : item))
+  return updated
 }
 
 export async function createTicket({ title, description, category, priority }) {
-  await ensureLegacyTicketsImported()
-  return request('/tickets', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ title, description, category, priority }),
-  })
+  const user = await requireUser()
+  if (user.role !== 'employee') throw new Error('Only employee users may create tickets.')
+  if (
+    typeof title !== 'string' || !title.trim() || title.length > 120 ||
+    typeof description !== 'string' || !description.trim() || description.length > 2000 ||
+    !categories.has(category) || !priorities.has(priority)
+  ) {
+    throw new Error('Enter a title and description, and choose a valid category and priority.')
+  }
+
+  const tickets = readTickets()
+  const nextId = tickets.reduce((highest, ticket) => {
+    const number = /^t-(\d+)$/.exec(ticket.id)?.[1]
+    return number ? Math.max(highest, Number(number)) : highest
+  }, 0) + 1
+  const now = new Date().toISOString()
+  const ticket = {
+    id: `t-${nextId}`,
+    title: title.trim(),
+    description: description.trim(),
+    status: 'open',
+    priority,
+    category,
+    requesterId: user.id,
+    requesterName: user.name,
+    requesterEmail: user.email,
+    assigneeId: null,
+    assigneeName: null,
+    createdAt: now,
+    updatedAt: now,
+    resolvedAt: null,
+    archivedAt: null,
+  }
+  writeTickets([...tickets, ticket])
+  return ticket
 }

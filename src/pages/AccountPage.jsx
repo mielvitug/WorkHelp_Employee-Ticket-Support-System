@@ -29,7 +29,7 @@ export function AccountPage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      setSuccess('Password updated. Other active sessions have been signed out.')
+      setSuccess('Password updated for this browser.')
     } catch (changeError) {
       setError(changeError.message)
     } finally {
